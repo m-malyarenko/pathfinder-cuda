@@ -43,4 +43,4 @@ build: $(OBJECTS)
 
 PHONY: clean
 clean:
-	del /Q .\build\bin\* .\build\obj\* > null
+	del /Q .\build\bin\* .\build\obj\*
