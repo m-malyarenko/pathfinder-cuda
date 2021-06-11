@@ -22,10 +22,10 @@ endif
 
 ifeq ($(TEST_MODE), ON)
 PP_DEFINE += TEST
-else ifeq ($(BUILD_TYPE), OFF)
+else ifeq ($(TEST_MODE), OFF)
 PP_DEFINE += NTEST
 else
-$(error Test mode undefined. Possible types: ON, OFF)
+$(error Test mode undefined. Possible values: ON, OFF)
 endif
 
 NVCC = nvcc
