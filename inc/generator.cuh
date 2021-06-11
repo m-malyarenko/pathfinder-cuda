@@ -33,7 +33,9 @@ __host__ void generator_new_contour(const size_t field_size, contour_instance* c
 
 __host__ cudaError_t generator_exec(generator_param* parameters);
 
-__global__ void generator_main_kernel(int* d_field,
+__global__ void generator_main_kernel(unsigned int sgrid_offset_x,
+									  unsigned int sgrid_offset_y,
+								      int* d_field,
 	                                  const size_t field_size,
 	                                  contour_instance* d_contour_list,
 	                                  const size_t contour_list_size);

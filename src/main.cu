@@ -13,6 +13,8 @@
 
 unsigned int BLOCK_DIM = 0;
 unsigned int GRID_DIM = 0;
+unsigned int SGRID_DIM = 0;
+unsigned int SGRID_SIZE = 0;
 
 __host__ int main(int argc, const char* argv[]) {
 	/*----------------------------------------------------------------------------
@@ -81,6 +83,11 @@ __host__ int main(int argc, const char* argv[]) {
 	/* Common Constants */
 	const size_t field_size = (size_t) field_size_l;
 	const size_t field_bytes = field_size * field_size * sizeof(unsigned int);
+
+	/* Set Supergrid Dimensions */
+	SGRID_SIZE = GRID_DIM * BLOCK_DIM;
+	SGRID_DIM = field_size / (SGRID_SIZE);
+	SGRID_DIM += (field_size % (SGRID_SIZE) != 0) ? 1 : 0;
 
 	#ifndef TEST_MODE
 	const size_t contour_list_size = (size_t) (1 + ((size_t) rand() % MAX_CONTOUR_NUM));
@@ -169,7 +176,7 @@ __host__ int main(int argc, const char* argv[]) {
 	printf("Pathfinder: Start...\n");
 	printf("Pathfinder: Generating field...\n");
 
-	#ifndef TEST_MODE
+	#ifdef NTEST
 	for (size_t i = 0; i < contour_list_size; i++) {
 		generator_new_contour(field_size, &(h_contour_list[i]));
 	}
@@ -222,7 +229,7 @@ __host__ int main(int argc, const char* argv[]) {
 	memset(&h_start, 0, sizeof(point2d));
 	memset(&h_finish, 0, sizeof(point2d));
 
-	#ifndef NTEST
+	#ifdef NTEST
 GEN_START_FINISH:
 
 	h_start.row = rand() % field_size;
