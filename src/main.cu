@@ -34,12 +34,12 @@ __host__ int main(int argc, const char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	GRID_DIM = strtol(argv[3], NULL, 10);
+	GRID_DIM = strtol(argv[2], NULL, 10);
 	if ((errno == ERANGE) ||
-		(BLOCK_DIM < MIN_BLOCK_DIM) ||
-		(BLOCK_DIM > MAX_BLOCK_DIM))
+		(GRID_DIM < MIN_GRID_DIM) ||
+		(GRID_DIM > MAX_GRID_DIM))
 	{
-		fprintf(stderr, "ERROR: incorrect block dim parameter\n");
+		fprintf(stderr, "ERROR: incorrect grid dim parameter\n");
 		return EXIT_FAILURE;
 	}
 
@@ -66,6 +66,10 @@ __host__ int main(int argc, const char* argv[]) {
 		fprintf(stderr, "ERROR: not enough global memory\n");
 		return EXIT_FAILURE;
 	}
+	if (property.canMapHostMemory != 1) {
+		fprintf(stderr, "ERROR: devise does not support host memory mapping\n");
+		return EXIT_FAILURE;
+	}
 
 	/* Seed Rand */
 	srand(time(0));
@@ -76,16 +80,19 @@ __host__ int main(int argc, const char* argv[]) {
 
 	/* Common Constants */
 	const size_t field_size = (size_t) field_size_l;
-	const size_t field_bytes = (size_t) field_size * (size_t) field_size * sizeof(unsigned int);
+	const size_t field_bytes = field_size * field_size * sizeof(unsigned int);
 
 	#ifndef TEST_MODE
-	const size_t contour_num = (size_t) (1 + ((size_t) rand() % MAX_CONTOUR_NUM));
+	const size_t contour_list_size = (size_t) (1 + ((size_t) rand() % MAX_CONTOUR_NUM));
 	#else
-	const size_t contour_num = 3;
+	const size_t contour_list_size = 3;
 	#endif
 
+	/* Host Zero-Copy Variables */
+	int* h_field_a = NULL;
+	int* h_field_b = NULL;
+
 	/* Host Variables */
-	int* h_field = NULL;
 	contour_instance* h_contour_list = NULL;
 	point2d h_start = { 0 };
 	point2d h_finish = { 0 };
@@ -119,23 +126,32 @@ __host__ int main(int argc, const char* argv[]) {
 	 * Memory Management
 	 *--------------------------------------------------------------------------*/
 
-	/* Host Memory */
-	cudaStatus = cudaHostAlloc(&h_field, field_bytes, cudaHostAllocDefault);
-	HANDLE_ERROR(cudaStatus, "Failed to allocate field on the host\n");
+	/* Zero-Copy Memory */
+	cudaStatus = cudaHostAlloc(&h_field_a,
+	                           field_bytes,
+	                           cudaHostAllocWriteCombined | cudaHostAllocMapped);
+	HANDLE_ERROR(cudaStatus, "Failed to allocate zero-copy field on the host\n");
+	memset(h_field_a, 0, field_bytes);
 
-	cudaStatus = cudaHostAlloc(&h_contour_list, contour_num * sizeof(contour_instance), cudaHostAllocDefault);
+	cudaStatus = cudaHostAlloc(&h_field_b,
+	                           field_bytes,
+							   cudaHostAllocWriteCombined | cudaHostAllocMapped);
+	HANDLE_ERROR(cudaStatus, "Failed to allocate zero-copy field on the host\n");
+
+	/* Host Memory */
+	cudaStatus = cudaHostAlloc(&h_contour_list,
+	                           contour_list_size * sizeof(contour_instance),
+	                           cudaHostAllocDefault);
 	HANDLE_ERROR(cudaStatus, "Failed to allocate contour list\n");
 
 	/* Device Memory */
-	cudaStatus = cudaMalloc(&d_field_a, field_bytes);
-	HANDLE_ERROR(cudaStatus, "Failed to allocate field on the device\n");
-	cudaStatus = cudaMemset(d_field_a, 0, field_bytes);
-	HANDLE_ERROR(cudaStatus, "Memset failed\n");
+	cudaStatus = cudaHostGetDevicePointer(&d_field_a, h_field_a, 0);
+	HANDLE_ERROR(cudaStatus, "Failed to get devise pointer to zero-copy memory\n");
 
-	cudaStatus = cudaMalloc(&d_field_b, field_bytes);
-	HANDLE_ERROR(cudaStatus, "Failed to allocate field on the device\n");
+	cudaStatus = cudaHostGetDevicePointer(&d_field_b, h_field_b, 0);
+	HANDLE_ERROR(cudaStatus, "Failed to get devise pointer to zero-copy memory\n");
 
-	cudaStatus = cudaMalloc(&d_contour_list, contour_num * sizeof(contour_instance));
+	cudaStatus = cudaMalloc(&d_contour_list, contour_list_size * sizeof(contour_instance));
 	HANDLE_ERROR(cudaStatus, "Failed to allocate contour list on the device\n");
 
 	cudaStatus = cudaMalloc(&d_start, sizeof(point2d));
@@ -153,7 +169,7 @@ __host__ int main(int argc, const char* argv[]) {
 	printf("Pathfinder: Generating field...\n");
 
 	#ifndef TEST_MODE
-	for (size_t i = 0; i < contour_num; i++) {
+	for (size_t i = 0; i < contour_list_size; i++) {
 		generator_new_contour(field_size, &(h_contour_list[i]));
 	}
 	#else
@@ -172,14 +188,14 @@ __host__ int main(int argc, const char* argv[]) {
 
 	cudaStatus = cudaMemcpy(d_contour_list,
 		                    h_contour_list,
-		                    contour_num * sizeof(contour_instance),
+		                    contour_list_size * sizeof(contour_instance),
 		                    cudaMemcpyDefault);
 	HANDLE_ERROR(cudaStatus, "Failed to copy data Host -> Device\n");
 
 	gen_parameters.d_field = d_field_a;
 	gen_parameters.field_size = field_size;
 	gen_parameters.d_contour_list = d_contour_list;
-	gen_parameters.contour_list_size = contour_num;
+	gen_parameters.contour_list_size = contour_list_size;
 
 	/* Start Timer */
 	cudaEventRecord(timer_start, 0);
@@ -192,9 +208,6 @@ __host__ int main(int argc, const char* argv[]) {
 	cudaEventRecord(timer_stop, 0);
 	cudaEventSynchronize(timer_stop);
 	cudaEventElapsedTime(&generator_time, timer_start, timer_stop);
-
-	cudaStatus = cudaMemcpy(h_field, d_field_a, field_bytes, cudaMemcpyDefault);
-	HANDLE_ERROR(cudaStatus, "Failed to copy data Device -> Host\n");
 
 	printf("Pathfinder: Field generated\n");
 
@@ -270,17 +283,11 @@ GEN_START_FINISH:
 	if (path_exists) {
 		printf("Pathfinder: Backtracing the path...\n");
 
-		cudaStatus = cudaMemcpy(h_field,
-			                    d_field_b,
-			                    field_bytes,
-			                    cudaMemcpyDefault);
-		HANDLE_ERROR(cudaStatus, "Failed to copy data Device -> Host\n");
-
 		/* Start Timer */
 		cudaEventRecord(timer_start, 0);
 
 		/* Run Path Backtrace */
-		pathfinder_backtrace(h_field, field_size, &h_start, &h_finish);
+		pathfinder_backtrace(h_field_a, field_size, &h_start, &h_finish);
 
 		/* Stop Timer */
 		cudaEventRecord(timer_stop, 0);
@@ -323,7 +330,7 @@ GEN_START_FINISH:
 				printf("F ");
 			}
 			else {
-				int point_val = h_field[field_size * i + j];
+				int point_val = h_field_a[field_size * i + j];
 				if (point_val == BARRIER_VAL) {
 					printf("# ");
 				}
@@ -347,11 +354,13 @@ GEN_START_FINISH:
 
 ERROR:
 
-	cudaFree(d_field_a);
-	cudaFree(d_field_b);
+	cudaEventDestroy(timer_start);
+	cudaEventDestroy(timer_stop);
+
 	cudaFree(d_contour_list);
 	cudaFree(d_start);
 	cudaFree(d_finish);
-	cudaFreeHost(h_field);
+	cudaFreeHost(h_field_a);
+	cudaFreeHost(h_field_b);
 	cudaFreeHost(h_contour_list);
 }

@@ -70,7 +70,6 @@ __host__ bool pathfinder_exec(pathfinder_param* parameters) {
 
 	cudaError_t cudaStatus = cudaSuccess;
 	bool pathfinder_status = false;
-	unsigned int count = 0;
 
 	int* d_field_prev = parameters->d_field_a;
 	int* d_field_next = parameters->d_field_b;
