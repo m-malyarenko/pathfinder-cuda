@@ -3,7 +3,6 @@
 
 /* Define -------------------------------------------------------------------*/
 
-#define TEST_MODE
 #define MIN_FIELD_SIZE ((long) 4)
 #define MAX_FIELD_SIZE ((long) 10000)
 

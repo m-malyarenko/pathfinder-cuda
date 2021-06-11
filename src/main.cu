@@ -84,7 +84,7 @@ __host__ int main(int argc, const char* argv[]) {
 	const size_t contour_num = 3;
 	#endif
 
-	/* Global Host Variables */
+	/* Host Variables */
 	int* h_field = NULL;
 	contour_instance* h_contour_list = NULL;
 	point2d h_start = { 0 };
@@ -152,6 +152,11 @@ __host__ int main(int argc, const char* argv[]) {
 	printf("Pathfinder: Start...\n");
 	printf("Pathfinder: Generating field...\n");
 
+	#ifndef TEST_MODE
+	for (size_t i = 0; i < contour_num; i++) {
+		generator_new_contour(field_size, &(h_contour_list[i]));
+	}
+	#else
 	h_contour_list[0].x = field_size / 2;
 	h_contour_list[0].y = 0;
 	h_contour_list[0].size = field_size / 2;
@@ -163,10 +168,7 @@ __host__ int main(int argc, const char* argv[]) {
 	h_contour_list[2].x = field_size / 4;
 	h_contour_list[2].y = 3 * (field_size / 4);
 	h_contour_list[2].size = field_size / 4;
-
-	// for (size_t i = 0; i < contour_num; i++) {
-	// 	generator_new_contour(field_size, &(h_contour_list[i]));
-	// }
+	#endif
 
 	cudaStatus = cudaMemcpy(d_contour_list,
 		                    h_contour_list,
@@ -205,28 +207,29 @@ __host__ int main(int argc, const char* argv[]) {
 	memset(&h_start, 0, sizeof(point2d));
 	memset(&h_finish, 0, sizeof(point2d));
 
+	#ifndef TEST_MODE
 GEN_START_FINISH:
 
-	h_start.row = 1;
-	h_start.col = 1;
+	h_start.row = rand() % field_size;
+	h_start.col = rand() % field_size;
 
-	h_finish.row = field_size - 1;
-	h_finish.col = 0;
-
-	// h_start.row = rand() % field_size;
-	// h_start.col = rand() % field_size;
-
-	// h_finish.row = rand() % field_size;
-	// h_finish.col = rand() % field_size;
+	h_finish.row = rand() % field_size;
+	h_finish.col = rand() % field_size;
 
 	if ((h_start.row == h_finish.row) && (h_start.col == h_finish.col)) {
 		goto GEN_START_FINISH;
 	}
 
-	/* Check if Target Points are inside the Contour */
 	if (!pathfinder_check_target_points(d_field_a, field_size, &h_start, &h_finish)) {
 		goto GEN_START_FINISH;
 	}
+	#else
+	h_start.row = 1;
+	h_start.col = 1;
+
+	h_finish.row = field_size - 1;
+	h_finish.col = 0;
+	#endif
 
 	cudaStatus = cudaMemcpy(d_start, &h_start, sizeof(point2d), cudaMemcpyDefault);
 	HANDLE_ERROR(cudaStatus, "Failed to copy data Host -> Device\n");
