@@ -6,12 +6,12 @@
 
 extern unsigned int BLOCK_DIM;
 
-__host__ bool pathfinder_check_target_points(int* d_field,
+__host__ bool pathfinder_check_target_points(int* h_field,
 	                                         const size_t field_size,
 	                                         point2d* h_start,
 	                                         point2d* h_finish)
 {
-	if ((d_field == NULL) ||
+	if ((h_field == NULL) ||
 		(h_start == NULL) ||
 		(h_finish == NULL))
 	{
@@ -19,57 +19,18 @@ __host__ bool pathfinder_check_target_points(int* d_field,
 		return false;
 	}
 
-	cudaError_t cudaStatus = cudaSuccess;
+	int start_val = h_field[h_start->row * field_size + h_start->col];
+	int finish_val = h_field[h_finish->row * field_size + h_finish->col];
 
-	int start_val = 0;
-	int finish_val = 0;
-
-	cudaStatus = cudaMemcpy(&start_val,
-		                    &d_field[h_start->row * field_size + h_start->col],
-		                    sizeof(int),
-		                    cudaMemcpyDefault);
-	HANDLE_ERROR(cudaStatus, "PATHFINDER ERROR: cudaMemcpy Device -> Host failed\n");
-
-	cudaStatus = cudaMemcpy(&finish_val,
-		                    &d_field[h_finish->row * field_size + h_finish->col],
-		                    sizeof(int),
-		                    cudaMemcpyDefault);
-	HANDLE_ERROR(cudaStatus, "PATHFINDER ERROR: cudaMemcpy Device -> Host failed\n");
-
-	if ((start_val == BARRIER_VAL) || (finish_val == BARRIER_VAL)) {
-		return false;
-	}
-	else {
-		return true;
-	}
-
-ERROR:
-	return false;
+	return (start_val != BARRIER_VAL) && (finish_val != BARRIER_VAL);
 }
 
-__host__ cudaError_t pathfinder_set_start_val(int* d_field, const size_t field_size, point2d* h_start) {
-	cudaError_t cudaStatus = cudaSuccess;
-
-	int start_val = START_VAL;
-	cudaStatus = cudaMemcpy(&d_field[h_start->row * field_size + h_start->col],
-		&start_val,
-		sizeof(int),
-		cudaMemcpyHostToDevice);
-
-	HANDLE_ERROR(cudaStatus, "PATHFINDER ERROR: cudaMemcpy Host -> Device failed\n");
-	return cudaSuccess;
-
-ERROR:
-	return cudaStatus;
-}
-
-__host__ bool pathfinder_exec(pathfinder_param* parameters) {
+__host__ unsigned int pathfinder_exec(pathfinder_param* parameters) {
 	if (parameters == NULL) {
 		return false;
 	}
 
 	cudaError_t cudaStatus = cudaSuccess;
-	bool pathfinder_status = false;
 
 	int* d_field_prev = parameters->d_field_a;
 	int* d_field_next = parameters->d_field_b;
@@ -106,6 +67,9 @@ __host__ bool pathfinder_exec(pathfinder_param* parameters) {
 		cudaStatus = cudaGetLastError();
 		HANDLE_ERROR(cudaStatus, "PATHFINDER ERROR: pathfinder_main_kernel launch failed\n");
 
+		cudaStatus = cudaThreadSynchronize();
+		HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: failed to synchronize thread\n");
+
 		cudaStatus = cudaMemcpy(&h_term_flag,
 			                    d_term_flag,
 			                    sizeof(unsigned int),
@@ -115,26 +79,27 @@ __host__ bool pathfinder_exec(pathfinder_param* parameters) {
 		int* tmp = d_field_next;
 		d_field_next = d_field_prev;
 		d_field_prev = tmp;
-		// #ifdef MODE
-		// 	if (count > 10 * parameters->field_size) break;
-		// 	count++;
-		// #endif
 	} while (!(h_term_flag & FINISH_REACHED) && (h_term_flag & NEXT_STEP_AVAILABLE));
 
 	cudaStatus = cudaDeviceSynchronize();
-	HANDLE_ERROR(cudaStatus, "PATHFINDER ERROR: cudaDeviceSynchronize failed\n");
+	HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: failed to synchronize device\n");
 
-	if (h_term_flag & FINISH_REACHED) {
-		pathfinder_status = true;
+	if ((h_term_flag & FINISH_REACHED) != 0) {
+		if (d_field_prev == parameters->d_field_a) {
+			return PATHFINDER_RESULT_FIELD_A;
+		}
+		else {
+			return PATHFINDER_RESULT_FIELD_B;
+		}
 	}
 	else {
-		pathfinder_status = false;
+		return PATHFINDER_NO_RESULT;
 	}
 
 ERROR:
 	cudaFree(d_term_flag);
 
-	return pathfinder_status;
+	return PATHFINDER_NO_RESULT;
 }
 
 __global__ void pathfinder_main_kernel(int* d_field_prev,

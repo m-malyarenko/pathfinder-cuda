@@ -25,6 +25,10 @@
 #define POINT_BLOCKED   ((unsigned int) 0)
 #define POINT_N_BLOCKED ((unsigned int) 1)
 
+#define PATHFINDER_NO_RESULT      ((unsigned int) 0)
+#define PATHFINDER_RESULT_FIELD_A ((unsigned int) 1)
+#define PATHFINDER_RESULT_FIELD_B ((unsigned int) 2)
+
 /* Macro --------------------------------------------------------------------*/
 
 #define FIELD_BYTES(N) ((size_t) (N) * (size_t) (N) * sizeof(int))

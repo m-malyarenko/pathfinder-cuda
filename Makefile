@@ -2,6 +2,7 @@ include sources.mk
 
 PROJ_NAME = pathfinder
 BUILD_TYPE = DEBUG
+TEST_MODE = OFF
 
 SRC_DIR = ./src
 INC_DIR = ./inc
@@ -19,9 +20,17 @@ else
 $(error Build type undefined. Possible types: DEBUG, RELEASE)
 endif
 
+ifeq ($(TEST_MODE), ON)
+PP_DEFINE += TEST
+else ifeq ($(BUILD_TYPE), OFF)
+PP_DEFINE += NTEST
+else
+$(error Test mode undefined. Possible types: ON, OFF)
+endif
+
 NVCC = nvcc
 CFLAGS = -arch=sm_75 -I $(INC_DIR)
-PPFLAGS = -D $(PP_DEFINE)
+PPFLAGS = $(PP_DEFINE:%=-D %)
 
 # Build object files
 $(OBJ_DIR)/%.obj: $(SRC_DIR)/%.cu

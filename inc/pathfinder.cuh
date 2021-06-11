@@ -32,9 +32,7 @@ __host__ bool pathfinder_check_target_points(int* d_field,
 	                                         point2d* h_start,
 	                                         point2d* h_finish);
 
-__host__ cudaError_t pathfinder_set_start_val(int* d_field, const size_t field_size, point2d* h_start);
-
-__host__ bool pathfinder_exec(pathfinder_param* parameters);
+__host__ unsigned int pathfinder_exec(pathfinder_param* parameters);
 
 __global__ void pathfinder_main_kernel(int* d_field_prev,
 	                                   int* d_field_next,

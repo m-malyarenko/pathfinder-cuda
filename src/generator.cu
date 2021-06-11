@@ -46,8 +46,11 @@ __host__ cudaError_t generator_exec(generator_param* parameters) {
 	cudaStatus = cudaGetLastError();
 	HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: generator_main_kernel launch failed\n");
 
+	cudaStatus = cudaThreadSynchronize();
+	HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: failed to synchronize thread\n");
+
 	cudaStatus = cudaDeviceSynchronize();
-	HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: cudaDeviceSynchronize failed\n");
+	HANDLE_ERROR(cudaStatus, "GENERATOR ERROR: failed to synchronize the device\n");
 
 ERROR:
 	return cudaStatus;

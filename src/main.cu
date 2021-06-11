@@ -91,6 +91,7 @@ __host__ int main(int argc, const char* argv[]) {
 	/* Host Zero-Copy Variables */
 	int* h_field_a = NULL;
 	int* h_field_b = NULL;
+	int* result_field = NULL;
 
 	/* Host Variables */
 	contour_instance* h_contour_list = NULL;
@@ -111,7 +112,7 @@ __host__ int main(int argc, const char* argv[]) {
 	/* Pathfinder Variables */
 	pathfinder_param pathfinder_parameters;
 	memset(&pathfinder_parameters, 0, sizeof(pathfinder_param));
-	bool path_exists = false;
+	unsigned int pathfinder_result = 0;
 
 	/* Timer Instances */
 	cudaEvent_t timer_start;
@@ -192,6 +193,7 @@ __host__ int main(int argc, const char* argv[]) {
 		                    cudaMemcpyDefault);
 	HANDLE_ERROR(cudaStatus, "Failed to copy data Host -> Device\n");
 
+	/* Set Generator Parameters */
 	gen_parameters.d_field = d_field_a;
 	gen_parameters.field_size = field_size;
 	gen_parameters.d_contour_list = d_contour_list;
@@ -220,7 +222,7 @@ __host__ int main(int argc, const char* argv[]) {
 	memset(&h_start, 0, sizeof(point2d));
 	memset(&h_finish, 0, sizeof(point2d));
 
-	#ifndef TEST_MODE
+	#ifndef NTEST
 GEN_START_FINISH:
 
 	h_start.row = rand() % field_size;
@@ -233,7 +235,7 @@ GEN_START_FINISH:
 		goto GEN_START_FINISH;
 	}
 
-	if (!pathfinder_check_target_points(d_field_a, field_size, &h_start, &h_finish)) {
+	if (!pathfinder_check_target_points(h_field_a, field_size, &h_start, &h_finish)) {
 		goto GEN_START_FINISH;
 	}
 	#else
@@ -258,9 +260,10 @@ GEN_START_FINISH:
 
 	printf("Pathfinder: Scanning the field...\n");
 
-	cudaStatus = pathfinder_set_start_val(d_field_a, field_size, &h_start);
-	HANDLE_ERROR(cudaStatus, "Failed to set start value\n");
+	/* Set Start Point Value */
+	h_field_a[h_start.row * field_size + h_start.col] = START_VAL;
 
+	/* Set Pathfinder Parameters */
 	pathfinder_parameters.d_field_a = d_field_a;
 	pathfinder_parameters.d_field_b = d_field_b;
 	pathfinder_parameters.field_size = field_size;
@@ -271,7 +274,7 @@ GEN_START_FINISH:
 	cudaEventRecord(timer_start, 0);
 
 	/* Run Pathfinder*/
-	path_exists = pathfinder_exec(&pathfinder_parameters);
+	pathfinder_result = pathfinder_exec(&pathfinder_parameters);
 
 	/* Stop Timer */
 	cudaEventRecord(timer_stop, 0);
@@ -280,14 +283,17 @@ GEN_START_FINISH:
 
 	printf("Pathfinder: Field is scanned\n");
 
-	if (path_exists) {
+	if (pathfinder_result != PATHFINDER_NO_RESULT) {
 		printf("Pathfinder: Backtracing the path...\n");
+
+		/* Find Out which Field is result */
+		result_field = (pathfinder_result == PATHFINDER_RESULT_FIELD_A) ? h_field_a : h_field_b;
 
 		/* Start Timer */
 		cudaEventRecord(timer_start, 0);
 
 		/* Run Path Backtrace */
-		pathfinder_backtrace(h_field_a, field_size, &h_start, &h_finish);
+		pathfinder_backtrace(result_field, field_size, &h_start, &h_finish);
 
 		/* Stop Timer */
 		cudaEventRecord(timer_stop, 0);
@@ -330,7 +336,7 @@ GEN_START_FINISH:
 				printf("F ");
 			}
 			else {
-				int point_val = h_field_a[field_size * i + j];
+				int point_val = result_field[field_size * i + j];
 				if (point_val == BARRIER_VAL) {
 					printf("# ");
 				}
