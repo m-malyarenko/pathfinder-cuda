@@ -172,7 +172,7 @@ __host__ int main(int argc, const char* argv[]) {
 	 * Generate Barrier Contours
 	 *--------------------------------------------------------------------------*/
 
-	printf("----------------[LOG]----------------\n\n");
+	printf("\n----------------[LOG]----------------\n\n");
 	printf("Pathfinder: Start...\n");
 	printf("Pathfinder: Generating field...\n");
 
@@ -327,7 +327,7 @@ GEN_START_FINISH:
 
 #ifndef NDEBUG
 	/* Print Out Field */
-	printf("+");
+	printf("\n+");
 	for (unsigned int i = 0; i < field_size * 2; i++) {
 		printf("-");
 	}
